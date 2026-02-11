@@ -4,11 +4,83 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from core.session_manager import session_manager
 from core import session_files
+from core.archive_utils import ArchiveCreator
+from core.config import settings
+from aiogram.types import FSInputFile, BufferedInputFile
 import logging
+import asyncio
 from pathlib import Path
 
 router = Router()
-logger = logging.getLogger("opencode_bot")
+logger = logging.getLogger("opencode_balls")
+
+async def _send_individual_files(message: types.Message, session_folder: Path, file_paths: list) -> None:
+    """Send individual files as Telegram documents."""
+    files_to_send = await ArchiveCreator.create_individual_files_list(session_folder, file_paths)
+    
+    if not files_to_send:
+        logger.warning("No files to send after filtering")
+        return
+    
+    logger.info(f"Sending {len(files_to_send)} individual files to user {message.from_user.id}")
+    
+    for abs_path, rel_path in files_to_send:
+        try:
+            # Send as document with caption showing relative path
+            await message.answer_document(
+                FSInputFile(str(abs_path), filename=abs_path.name),
+                caption=f"`{rel_path}`"
+            )
+            logger.debug(f"Sent file: {rel_path}")
+            # Small delay to avoid rate limiting
+            await asyncio.sleep(0.5)
+        except Exception as e:
+            logger.error(f"Failed to send file {rel_path}: {e}")
+
+async def _send_archive(message: types.Message, session_folder: Path, file_paths: list) -> None:
+    """Create and send ZIP archive of files."""
+    logger.info(f"Creating archive for {len(file_paths)} files")
+    
+    archive_buffer, archive_name, files_added = await ArchiveCreator.create_session_archive(
+        session_folder, file_paths
+    )
+    
+    if not archive_buffer or files_added == 0:
+        await message.answer("❌ Failed to create file archive.")
+        return
+    
+    # Send archive
+    try:
+        await message.answer_document(
+            BufferedInputFile(archive_buffer.getvalue(), filename=archive_name),
+            caption=f"📦 Archive: {archive_name} ({files_added} files)"
+        )
+        logger.info(f"Sent archive {archive_name} with {files_added} files")
+    except Exception as e:
+        logger.error(f"Failed to send archive: {e}")
+        await message.answer("❌ Failed to send archive file.")
+
+async def send_session_files(message: types.Message, session_folder: Path, all_files: list) -> None:
+    """Send session files to user via Telegram."""
+    if not all_files:
+        await message.answer("No files to download.")
+        return
+    
+    # Format file list for display
+    file_list_message = ArchiveCreator.format_file_list_for_display(
+        {"all": all_files, "created": all_files, "modified": []}, 
+        session_folder
+    )
+    if file_list_message:
+        await message.answer(file_list_message, parse_mode="Markdown")
+    
+    # Send files based on count
+    if len(all_files) <= settings.max_files_before_archive:
+        # Send individual files
+        await _send_individual_files(message, session_folder, all_files)
+    else:
+        # Send archive
+        await _send_archive(message, session_folder, all_files)
 
 class EditFileStates(StatesGroup):
     waiting_for_filename = State()
@@ -101,8 +173,47 @@ async def cmd_list_files(message: types.Message):
         size_kb = file_info['size'] / 1024
         text += f"{i}. <code>{file_info['name']}</code>\n"
         text += f"   Size: {size_kb:.1f} KB\n"
-    
     await message.answer(text, parse_mode="HTML")
+
+
+@router.message(Command("download"))
+async def cmd_download_files(message: types.Message):
+    """Download all files from current session"""
+    logger.info(f"cmd_download_files called by user {message.from_user.id}")
+    user_id = message.from_user.id
+    active_session = await session_manager.get_active_session(user_id)
+    
+    if active_session is None:
+        await message.answer("You need an active session. Use /newsession first.")
+        return
+
+    if 'id' not in active_session:
+        logger.error(f"Active session missing 'id' key: {active_session}")
+        await message.answer("Session error: missing session ID.")
+        return
+    
+    session_id = active_session['id']
+    files_info = session_files.list_session_files(session_id)
+    
+    if not files_info:
+        await message.answer("No files in session folder to download.")
+        return
+    
+    # Extract just filenames
+    file_names = [file_info['name'] for file_info in files_info]
+    
+    # Get session folder
+    session_folder = session_files.get_session_folder(session_id)
+    
+    # Send initial message
+    status_msg = await message.answer(f"📥 Preparing to download {len(file_names)} files...")
+    
+    # Send files
+    await send_session_files(message, session_folder, file_names)
+    
+    # Update status
+    await status_msg.edit_text(f"✅ Downloaded {len(file_names)} files from session {session_id[:8]}")
+
 
 @router.message(Command("view"))
 async def cmd_view_file(message: types.Message, command: CommandObject):
@@ -113,6 +224,11 @@ async def cmd_view_file(message: types.Message, command: CommandObject):
     
     if active_session is None:
         await message.answer("You need an active session. Use /newsession first.")
+        return
+
+    if 'id' not in active_session:
+        logger.error(f"Active session missing 'id' key: {active_session}")
+        await message.answer("Session error: missing session ID.")
         return
     
     # Check if filename provided as argument
@@ -153,6 +269,11 @@ async def cmd_edit_file(message: types.Message, command: CommandObject, state: F
     
     if active_session is None:
         await message.answer("You need an active session. Use /newsession first.")
+        return
+
+    if 'id' not in active_session:
+        logger.error(f"Active session missing 'id' key: {active_session}")
+        await message.answer("Session error: missing session ID.")
         return
     
     # Check if filename provided as argument

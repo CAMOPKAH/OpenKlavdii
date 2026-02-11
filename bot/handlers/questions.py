@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, cast
 import logging
 import asyncio
 import time
@@ -219,6 +219,7 @@ async def handle_question_category(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
     
+    msg = cast(types.Message, callback.message)
     category_id = callback.data.split(":", 1)[1]
     user_id = callback.from_user.id
     
@@ -234,13 +235,13 @@ async def handle_question_category(callback: CallbackQuery, state: FSMContext):
     
     if not code:
         await callback.answer("❌ Код не найден")
-        await callback.message.edit_text("❌ Код не найден. Пожалуйста, начните заново.")
+        await msg.edit_text("❌ Код не найден. Пожалуйста, начните заново.")
         return
     
     # For custom question, ask for question text
     if category_id == "custom_question":
         await state.update_data(question_category=category_id)
-        await callback.message.edit_text(
+        await msg.edit_text(
             "💭 **Свой вопрос**\n\n"
             f"```python\n{code[:200]}{'...' if len(code) > 200 else ''}\n```\n\n"
             "Теперь напишите свой вопрос по этому коду:",
@@ -255,7 +256,7 @@ async def handle_question_category(callback: CallbackQuery, state: FSMContext):
     if category_id == "code_translate":
         # Need additional info for translation
         await state.update_data(question_category=category_id, question_code=code)
-        await callback.message.edit_text(
+        await msg.edit_text(
             "🔤 **Перевод кода**\n\n"
             f"```python\n{code[:200]}{'...' if len(code) > 200 else ''}\n```\n\n"
             "С какого языка перевести и на какой?\n"
@@ -271,7 +272,7 @@ async def handle_question_category(callback: CallbackQuery, state: FSMContext):
     await state.update_data(question_text=question, question_category=category_id)
     
     # Send to OpenCode
-    await process_question_with_opencode(callback.message, state, question, code, user_id)
+    await process_question_with_opencode(msg, state, question, code, user_id)
     await callback.answer()
 
 

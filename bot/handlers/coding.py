@@ -235,9 +235,14 @@ async def process_generation_prompt(message: types.Message, state: FSMContext):
                 continue
             
             # Add part numbering if multiple parts
-            prefix = "🤔 *Thinking*"
-            if len(parts) > 1:
-                prefix = f"🤔 *Thinking ({i+1}/{len(parts)})*"
+            if "?" in part:
+                prefix = "❓ *Question*"
+                if len(parts) > 1:
+                    prefix = f"❓ *Question ({i+1}/{len(parts)})*"
+            else:
+                prefix = "🤔 *Thinking*"
+                if len(parts) > 1:
+                    prefix = f"🤔 *Thinking ({i+1}/{len(parts)})*"
             
             try:
                 thinking_msg = await message.answer(f"{prefix}: {part}", parse_mode="Markdown")
@@ -488,9 +493,14 @@ async def process_debug_error(message: Message, state: FSMContext):
                 continue
             
             # Add part numbering if multiple parts
-            prefix = "🤔 *Thinking*"
-            if len(parts) > 1:
-                prefix = f"🤔 *Thinking ({i+1}/{len(parts)})*"
+            if "?" in part:
+                prefix = "❓ *Question*"
+                if len(parts) > 1:
+                    prefix = f"❓ *Question ({i+1}/{len(parts)})*"
+            else:
+                prefix = "🤔 *Thinking*"
+                if len(parts) > 1:
+                    prefix = f"🤔 *Thinking ({i+1}/{len(parts)})*"
             
             try:
                 thinking_msg = await message.answer(f"{prefix}: {part}", parse_mode="Markdown")
@@ -714,9 +724,14 @@ async def process_refactor_code(message: Message, state: FSMContext):
                 continue
             
             # Add part numbering if multiple parts
-            prefix = "🤔 *Thinking*"
-            if len(parts) > 1:
-                prefix = f"🤔 *Thinking ({i+1}/{len(parts)})*"
+            if "?" in part:
+                prefix = "❓ *Question*"
+                if len(parts) > 1:
+                    prefix = f"❓ *Question ({i+1}/{len(parts)})*"
+            else:
+                prefix = "🤔 *Thinking*"
+                if len(parts) > 1:
+                    prefix = f"🤔 *Thinking ({i+1}/{len(parts)})*"
             
             try:
                 thinking_msg = await message.answer(f"{prefix}: {part}", parse_mode="Markdown")
@@ -1077,9 +1092,14 @@ async def handle_text_message(message: types.Message, state: FSMContext):
                 continue
             
             # Add part numbering if multiple parts
-            prefix = "🤔 *Thinking*"
-            if len(parts) > 1:
-                prefix = f"🤔 *Thinking ({i+1}/{len(parts)})*"
+            if "?" in part:
+                prefix = "❓ *Question*"
+                if len(parts) > 1:
+                    prefix = f"❓ *Question ({i+1}/{len(parts)})*"
+            else:
+                prefix = "🤔 *Thinking*"
+                if len(parts) > 1:
+                    prefix = f"🤔 *Thinking ({i+1}/{len(parts)})*"
             
             try:
                 thinking_msg = await message.answer(f"{prefix}: {part}", parse_mode="Markdown")
